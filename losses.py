@@ -90,7 +90,7 @@ def compute_batch_loss(logits, label_vec, P):
             zero_loss_matrix = torch.zeros_like(loss_matrix)
             final_loss_matrix = torch.where(unobserved_loss >= topk_lossvalue, zero_loss_matrix, loss_matrix)
                 
-    main_loss = P['lambda'] * final_loss_matrix.mean() + (1 - P['lambda']) * loss_epr(logits, label_vec.clip(0), P)
+    main_loss = P['beta'] * final_loss_matrix.mean() + (1 - P['beta']) * loss_epr(logits, label_vec.clip(0), P)
 
     
     return main_loss, correction_idx

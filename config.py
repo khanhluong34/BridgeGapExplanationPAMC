@@ -85,7 +85,7 @@ def get_configs():
     parser.add_argument('--bsize', type=int, default=16)
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--alpha', type=float, default=5)
-    parser.add_argument('--lambda', type=float, default=0.9)
+    parser.add_argument('--beta', type=float, default=0.9)
     
 
     args = parser.parse_args()
