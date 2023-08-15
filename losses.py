@@ -4,7 +4,25 @@ from torch._C import ThroughputBenchmark
 import torch.nn.functional as F
 import math 
 
-   
+LOG_EPSILON = 1e-5
+
+def neg_log(x):
+    return - torch.log(x + LOG_EPSILON)
+
+def log_loss(preds, targs):
+    return targs * neg_log(preds)
+
+def expected_positive_regularizer(preds, expected_num_pos, norm='2'):
+    # Assumes predictions in [0,1].
+    if norm == '1':
+        reg = torch.abs(preds.sum(1).mean(0) - expected_num_pos)
+    elif norm == '2':
+        reg = (preds.sum(1).mean(0) - expected_num_pos)**2
+    else:
+        raise NotImplementedError
+    return reg
+    
+
 
 '''
 loss functions
@@ -18,6 +36,17 @@ def loss_an(logits, observed_labels):
     corrected_loss_matrix = F.binary_cross_entropy_with_logits(logits, torch.logical_not(observed_labels).float(), reduction='none')
     return loss_matrix, corrected_loss_matrix
 
+def loss_epr(logits, observed_labels, P):
+    # unpack:
+    preds = torch.sigmoid(logits)
+    # input validation:
+    assert torch.min(observed_labels) >= 0
+    # compute loss w.r.t. observed positives:
+    loss_mtx = torch.zeros_like(observed_labels)
+    loss_mtx[observed_labels == 1] = neg_log(preds[observed_labels == 1])
+    # compute regularizer: 
+    reg_loss = expected_positive_regularizer(preds, P['expected_num_pos'], norm='2') / (P['num_classes'] ** 2)
+    return loss_mtx.mean() + reg_loss
 
 '''
 top-level wrapper
@@ -61,6 +90,7 @@ def compute_batch_loss(logits, label_vec, P):
             zero_loss_matrix = torch.zeros_like(loss_matrix)
             final_loss_matrix = torch.where(unobserved_loss >= topk_lossvalue, zero_loss_matrix, loss_matrix)
                 
-    main_loss = final_loss_matrix.mean()
+    main_loss = P['lambda'] * final_loss_matrix.mean() + (1 - P['lambda']) * loss_epr(logits, label_vec.clip(0), P)
+
     
     return main_loss, correction_idx
