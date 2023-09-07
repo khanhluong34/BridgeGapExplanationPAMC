@@ -11,26 +11,32 @@ def get_metadata(dataset_name):
     if dataset_name == 'pascal':
         meta = {
             'num_classes': 20,
-            'path_to_dataset': 'data/pascal',
-            'path_to_images': 'data/pascal/VOCdevkit/VOC2012/JPEGImages'
+            'path_to_dataset': '/home/s/ducnq/spml-paper/data/pascal',
+            'path_to_images': '/home/s/ducnq/spml-paper/data/pascal/VOCdevkit/VOC2012/JPEGImages'
         }
     elif dataset_name == 'coco':
         meta = {
             'num_classes': 80,
-            'path_to_dataset': 'data/coco',
-            'path_to_images': 'data/coco'
+            'path_to_dataset': '/home/s/ducnq/spml-paper/data/coco',
+            'path_to_images': '/home/s/ducnq/spml-paper/data/coco'
         }
     elif dataset_name == 'nuswide':
         meta = {
             'num_classes': 81,
-            'path_to_dataset': 'data/nuswide',
-            'path_to_images': 'data/nuswide/Flickr'
+            'path_to_dataset': '/home/s/ducnq/spml-paper/data/nuswide',
+            'path_to_images': '/home/s/ducnq/spml-paper/data/nuswide/Flickr/Flickr'
         }
     elif dataset_name == 'cub':
         meta = {
             'num_classes': 312,
-            'path_to_dataset': 'data/cub',
-            'path_to_images': 'data/cub/CUB_200_2011/images'
+            'path_to_dataset': '/home/s/ducnq/spml-paper/data/cub',
+            'path_to_images': '/home/s/ducnq/spml-paper/data/cub/CUB_200_2011/images'
+        }
+    elif dataset_name == 'glacemood':
+        meta = {
+            'num_classes': 41,
+            'path_to_dataset': 'data/glacemood',
+            'path_to_images': 'home/s/mmclassification/data/glace_moods'
         }
     else:
         raise NotImplementedError('Metadata dictionary not implemented.')
@@ -53,19 +59,20 @@ def get_transforms():
     
     (imagenet_mean, imagenet_std) = get_imagenet_stats()
     tx = {}
+    resized = 224 # test for convnext-tiny, default 448
     tx['train'] = transforms.Compose([
-        transforms.Resize((448, 448)),
+        transforms.Resize((resized, resized)),
         transforms.RandomHorizontalFlip(0.5),
         transforms.ToTensor(),
         transforms.Normalize(mean=imagenet_mean, std=imagenet_std)
     ])
     tx['val'] = transforms.Compose([
-        transforms.Resize((448, 448)),
+        transforms.Resize((resized, resized)),
         transforms.ToTensor(),
         transforms.Normalize(mean=imagenet_mean, std=imagenet_std)
     ])
     tx['test'] = transforms.Compose([
-        transforms.Resize((448, 448)),
+        transforms.Resize((resized, resized)),
         transforms.ToTensor(),
         transforms.Normalize(mean=imagenet_mean, std=imagenet_std)
     ])
@@ -107,6 +114,8 @@ def get_data(P):
     elif P['dataset'] == 'nuswide':
         ds = multilabel(P, tx).get_datasets()
     elif P['dataset'] == 'cub':
+        ds = multilabel(P, tx).get_datasets()
+    elif P['dataset'] == 'glacemood':
         ds = multilabel(P, tx).get_datasets()
     else:
         raise ValueError('Unknown dataset.')
@@ -153,55 +162,91 @@ class multilabel:
         # load data:
         source_data = load_data(self.base_path, P)
         
-        # generate indices to split official train set into train and val:
-        split_idx = {}
-        (split_idx['train'], split_idx['val']) = generate_split(
-            len(source_data['train']['images']),
-            P['val_frac'],
-            np.random.RandomState(P['split_seed'])
+        if P['dataset'] == 'glacemood':
+            # we use the test set for both validation and testing because it is only dataset that is fully annotated.
+            # define train set:
+            self.train = ds_multilabel(
+                P['dataset'],
+                source_data['train']['images'],
+                source_data['train']['labels'],
+                source_data['train']['labels_obs'],
+                source_data['train']['feats'] if P['use_feats'] else [],
+                tx['train'],
+                P['use_feats']
             )
-        
-        # subsample split indices: # commenting this out makes the val set map be low?
-        ss_rng = np.random.RandomState(P['ss_seed'])
-        temp_train_idx = copy.deepcopy(split_idx['train'])
-        for phase in ['train', 'val']:
-            num_initial = len(split_idx[phase])
-            num_final = int(np.round(P['ss_frac_{}'.format(phase)] * num_initial))
-            split_idx[phase] = split_idx[phase][np.sort(ss_rng.permutation(num_initial)[:num_final])]
-        
-        # define train set:
-        self.train = ds_multilabel(
-            P['dataset'],
-            source_data['train']['images'][split_idx['train']],
-            source_data['train']['labels'][split_idx['train'], :],
-            source_data['train']['labels_obs'][split_idx['train'], :],
-            source_data['train']['feats'][split_idx['train'], :] if P['use_feats'] else [],
-            tx['train'],
-            P['use_feats']
-        )
+                
+            # define val set:
+            self.val = ds_multilabel(
+                P['dataset'],
+                source_data['val']['images'],
+                source_data['val']['labels'],
+                source_data['val']['labels_obs'],
+                source_data['val']['feats'] if P['use_feats'] else [],
+                tx['val'],
+                P['use_feats']
+            )
             
-        # define val set:
-        self.val = ds_multilabel(
-            P['dataset'],
-            source_data['train']['images'][split_idx['val']],
-            source_data['train']['labels'][split_idx['val'], :],
-            source_data['train']['labels_obs'][split_idx['val'], :],
-            source_data['train']['feats'][split_idx['val'], :] if P['use_feats'] else [],
-            tx['val'],
-            P['use_feats']
-        )
-        
-        # define test set:
-        self.test = ds_multilabel(
-            P['dataset'],
-            source_data['val']['images'],
-            source_data['val']['labels'],
-            source_data['val']['labels_obs'],
-            source_data['val']['feats'],
-            tx['test'],
-            P['use_feats']
-        )
-        
+            # define test set:
+            self.test = ds_multilabel(
+                P['dataset'],
+                source_data['val']['images'],
+                source_data['val']['labels'],
+                source_data['val']['labels_obs'],
+                source_data['val']['feats'],
+                tx['test'],
+                P['use_feats']
+            )
+        else:
+            # if the dataset is not glacemood, then
+            # generate indices to split official train set into train and val:
+            split_idx = {}
+            (split_idx['train'], split_idx['val']) = generate_split(
+                len(source_data['train']['images']),
+                P['val_frac'],
+                np.random.RandomState(P['split_seed'])
+                )
+            
+            # subsample split indices: # commenting this out makes the val set map be low?
+            ss_rng = np.random.RandomState(P['ss_seed'])
+            temp_train_idx = copy.deepcopy(split_idx['train'])
+            for phase in ['train', 'val']:
+                num_initial = len(split_idx[phase])
+                num_final = int(np.round(P['ss_frac_{}'.format(phase)] * num_initial))
+                split_idx[phase] = split_idx[phase][np.sort(ss_rng.permutation(num_initial)[:num_final])]
+            
+            # define train set:
+            self.train = ds_multilabel(
+                P['dataset'],
+                source_data['train']['images'][split_idx['train']],
+                source_data['train']['labels'][split_idx['train'], :],
+                source_data['train']['labels_obs'][split_idx['train'], :],
+                source_data['train']['feats'][split_idx['train'], :] if P['use_feats'] else [],
+                tx['train'],
+                P['use_feats']
+            )
+                
+            # define val set:
+            self.val = ds_multilabel(
+                P['dataset'],
+                source_data['train']['images'][split_idx['val']],
+                source_data['train']['labels'][split_idx['val'], :],
+                source_data['train']['labels_obs'][split_idx['val'], :],
+                source_data['train']['feats'][split_idx['val'], :] if P['use_feats'] else [],
+                tx['val'],
+                P['use_feats']
+            )
+            
+            # define test set:
+            self.test = ds_multilabel(
+                P['dataset'],
+                source_data['val']['images'],
+                source_data['val']['labels'],
+                source_data['val']['labels_obs'],
+                source_data['val']['feats'],
+                tx['test'],
+                P['use_feats']
+            )
+            
         # define dict of dataset lengths: 
         self.lengths = {'train': len(self.train), 'val': len(self.val), 'test': len(self.test)}
     
@@ -295,4 +340,6 @@ def get_category_list(P):
         pass # TODO
     
     elif P['dataset'] == 'cub':
+        pass # TODO
+    elif P['dataset'] == 'glacemood':
         pass # TODO

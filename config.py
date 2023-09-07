@@ -5,18 +5,22 @@ from munch import Munch as mch
 from os.path import join as ospj
 from datetime import datetime
 
-_DATASET = ('pascal', 'coco', 'nuswide', 'cub', 'openimages')
+_DATASET = ('pascal', 'coco', 'nuswide', 'cub', 'openimages', 'glacemood')
 _SCHEMES = ('LL-R', 'LL-Ct', 'LL-Cp')
 _LOOKUP = {
     'feat_dim': {
         'resnet50': 2048,
         'resnet101' : 2048,
+        'convnext-tiny': 768, #
+        'convnext-base': 1024,
+        
     },
     'expected_num_pos': {
             'pascal': 1.5,
             'coco': 2.9,
             'nuswide': 1.9,
-            'cub': 31.4
+            'cub': 31.4,
+            'glacemood': 1.25,
         },
     'num_classes': {
         'pascal': 20,
@@ -24,6 +28,7 @@ _LOOKUP = {
         'nuswide': 81,
         'cub': 312,
         'openimages': 5000,
+        'glacemood': 41
     },
     'delta_rel': {
         'LL-R': 0.5,
@@ -47,20 +52,22 @@ def set_default_configs(args):
     args.split_seed = 1200
     args.train_set_variant = 'observed'
     args.val_set_variant = 'clean'
-    args.arch = 'resnet50'
+    args.arch = 'convnext-tiny' #
     args.freeze_feature_extractor = False
     args.use_pretrained = True
     args.num_workers = 4
-    args.lr_mult = 10
+    args.lr_mult = 5       # decrease lr_mult -> increase lr, init 10
     args.save_path = './results'
 
     return args
 
 def set_follow_up_configs(args):
     args.feat_dim = _LOOKUP['feat_dim'][args.arch]
-    args.expected_num_pos = _LOOKUP['expected_num_pos'][args.dataset]
+    if args.dataset != 'glacemood': 
+        args.expected_num_pos = _LOOKUP['expected_num_pos'][args.dataset]
+        args.delta_rel = _LOOKUP['delta_rel'][args.largelossmod_scheme]
+
     args.num_classes = _LOOKUP['num_classes'][args.dataset]
-    args.delta_rel = _LOOKUP['delta_rel'][args.largelossmod_scheme]
     now = datetime.now()
     args.experiment_name = str(now).split(".")[0].replace('-','').replace(" ","_").replace(":","")
     args.save_path = set_dir(args.save_path, args.experiment_name)
@@ -79,14 +86,14 @@ def get_configs():
                         choices=_DATASET)
     parser.add_argument('--largelossmod_scheme', type=str, required=True, 
                         choices=_SCHEMES)
-                        
+    parser.add_argument('--expected_num_pos', type=float, default=1.25)    
     parser.add_argument('--num_epochs', type=int, default=10)
     parser.add_argument('--gpu_num', type=str, default='0')
     parser.add_argument('--bsize', type=int, default=16)
     parser.add_argument('--lr', type=float, default=1e-5)
     parser.add_argument('--alpha', type=float, default=5)
     parser.add_argument('--beta', type=float, default=0.9)
-    
+    parser.add_argument('--delta_rel', type=float, default=0.5)
 
     args = parser.parse_args()
     args = set_default_configs(args)
