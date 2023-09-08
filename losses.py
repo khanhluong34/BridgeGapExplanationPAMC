@@ -48,6 +48,18 @@ def loss_epr(logits, observed_labels, P):
     reg_loss = expected_positive_regularizer(preds, P['expected_num_pos'], norm='2') / (P['num_classes'] ** 2)
     return loss_mtx.mean() + reg_loss
 
+# def loss_epr(logits, observed_labels, P):
+#     # unpack:
+#     preds = torch.sigmoid(logits)
+#     # input validation:
+#     assert torch.min(observed_labels) >= 0
+#     # compute loss w.r.t. observed positives:
+#     loss_mtx = torch.zeros_like(observed_labels)
+#     loss_mtx[observed_labels == 1] = neg_log(preds[observed_labels == 1])
+#     # compute regularizer: 
+#     reg_loss = expected_positive_regularizer(preds, P['expected_num_pos'], norm='2') / (P['num_classes'] ** 2)
+#     return 0 * loss_mtx.mean() + reg_loss
+
 '''
 top-level wrapper
 '''

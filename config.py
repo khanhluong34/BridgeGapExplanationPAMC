@@ -52,11 +52,11 @@ def set_default_configs(args):
     args.split_seed = 1200
     args.train_set_variant = 'observed'
     args.val_set_variant = 'clean'
-    args.arch = 'convnext-tiny' #
+    args.arch = 'resnet50' #
     args.freeze_feature_extractor = False
     args.use_pretrained = True
     args.num_workers = 4
-    args.lr_mult = 5       # decrease lr_mult -> increase lr, init 10
+    args.lr_mult = 10       # decrease lr_mult -> increase lr, init 10
     args.save_path = './results'
 
     return args
